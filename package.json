@@ -19,6 +19,7 @@
   "homepage": "https://github.com/Bluesheep33/MSDPM#readme",
   "dependencies": {
     "discord.js": "^14.21.0",
-    "dotenv": "^17.2.0"
+    "dotenv": "^17.2.0",
+    "rcon": "^1.1.0"
   }
 }

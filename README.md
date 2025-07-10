@@ -5,7 +5,20 @@ With this tool you can minimize power consumption of your Minecraft server by au
 
 ## Installation
 - Clone repository
-- Open RCON port in mc server's`server.properties`
-- Fill in values in `.env` file
+- Ensure your `server.properties` file inside the folder of your minecraft server has RCON enabled:
+```dotenv
+enable-rcon=true
+rcon.port=25575
+rcon.password=your_rcon_password_here
+```
+- Edit `.env` with your configuration:
+```dotenv
+DISCORD_TOKEN: Your Discord bot token
+CHANNEL_ID: The Discord channel ID where the bot should respond to commands
+SERVICE_NAME: Your systemd service name (e.g., "minecraft-server")
+RCON_PASSWORD: Your Minecraft server's RCON password
+RCON_HOST: Usually "localhost" if running on the same machine
+RCON_PORT: Usually 25575 (default RCON port)
+```
 - Run bot using `npm start` or `node src/bot.js`
-  - Ideally use a process manager like `pm2` or `systemctl` to run the bot in the background
+  - Ideally use a process manager like `pm2` or `systemctl` to run the bot as a background service

@@ -2,17 +2,24 @@
   "name": "msdpm",
   "version": "1.0.0",
   "description": "Minecraft Server Daemon Process Manager",
-  "main": "index.js",
+  "main": "src/bot.js",
   "scripts": {
+    "start": "node src/bot.js",
+    "dev": "nodemon src/bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Bluesheep33/MSDPM.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "discord",
+    "bot",
+    "minecraft",
+    "systemctl"
+  ],
+  "author": "adaja",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/Bluesheep33/MSDPM/issues"
   },
@@ -21,5 +28,8 @@
     "discord.js": "^14.21.0",
     "dotenv": "^17.2.0",
     "rcon": "^1.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }

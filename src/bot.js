@@ -22,11 +22,13 @@ class MinecraftServerManager {
             rconHost: process.env.RCON_HOST || 'localhost',
             rconPort: parseInt(process.env.RCON_PORT) || 25575,
             serviceName: process.env.SERVICE_NAME || 'minecraft-server',
-            checkInterval: parseInt(process.env.CHECK_INTERVAL) || 60000, // 1 minute
-            shutdownDelay: parseInt(process.env.SHUTDOWN_DELAY) || 900000  // 15 minutes
+            checkInterval: parseInt(process.env.CHECK_INTERVAL) || 60_000, // 1 minute
+            shutdownDelay: parseInt(process.env.SHUTDOWN_DELAY) || 900_000  // 15 minutes
         };
 
-        this.setupBot();
+        this.setupBot().then(r => {
+            console.log('✅ Bot setup complete');
+        });
     }
 
     async setupBot() {
@@ -77,7 +79,7 @@ class MinecraftServerManager {
         // Check if command is used in the correct channel
         if (interaction.channelId !== this.config.channelId) {
             await interaction.reply({
-                content: '❌ This command can only be used in the designated channel.',
+                content: '❌ This command can only be used in <#' + this.config.channelId + '>',
                 ephemeral: true
             });
             return;
@@ -101,7 +103,7 @@ class MinecraftServerManager {
                 await interaction.editReply('✅ Minecraft server started successfully!');
                 this.startPlayerMonitoring();
             } else {
-                await interaction.editReply('❌ Failed to start Minecraft server. Check logs for details.');
+                await interaction.editReply('❌ Failed to start Minecraft server.');
             }
         } catch (error) {
             console.error('Error handling start command:', error);
@@ -144,31 +146,15 @@ class MinecraftServerManager {
 
     async stopServer() {
         try {
-            // Send warning to players if RCON is available
-            if (this.rcon) {
-                try {
-                    await this.sendRconCommand('say Server will shut down in 30 seconds due to inactivity');
-                    await new Promise(resolve => setTimeout(resolve, 30000));
-                } catch (rconError) {
-                    console.log('Could not send warning via RCON:', rconError.message);
-                }
-            }
-
             await execAsync(`sudo systemctl stop ${this.config.serviceName}`);
             this.serverRunning = false;
-
-            // Disconnect RCON
-            if (this.rcon) {
-                this.rcon.disconnect();
-                this.rcon = null;
-            }
 
             console.log('✅ Minecraft server stopped successfully');
 
             // Notify channel
             const channel = this.client.channels.cache.get(this.config.channelId);
             if (channel) {
-                await channel.send('🔴 Minecraft server stopped due to inactivity (no players for 15 minutes).');
+                await channel.send('🔴 Minecraft server stopped due to inactivity.');
             }
 
             return true;

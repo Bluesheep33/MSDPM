@@ -26,25 +26,24 @@ class MinecraftServerManager {
             shutdownDelay: parseInt(process.env.SHUTDOWN_DELAY) || 900_000  // 15 minutes
         };
 
-        this.setupBot().then(r => {
-            console.log('✅ Bot setup complete');
-        });
+        this.setupBot();
     }
 
     async setupBot() {
-        // Register slash commands
-        await this.registerCommands();
-
         // Bot event handlers
-        this.client.once('ready', () => {
+        this.client.once('ready', async () => {
             console.log(`✅ Bot is ready! Logged in as ${this.client.user.tag}`);
-            this.checkServerStatus();
+
+            // Register slash commands
+            await this.registerCommands();
+
+            await this.checkServerStatus();
         });
 
         this.client.on('interactionCreate', async (interaction) => {
             if (!interaction.isChatInputCommand()) return;
 
-            if (interaction.commandName === 'startmc') {
+            if (interaction.commandName === 'startserver') {
                 await this.handleStartCommand(interaction);
             }
         });
@@ -56,7 +55,7 @@ class MinecraftServerManager {
     async registerCommands() {
         const commands = [
             new SlashCommandBuilder()
-                .setName('startmc')
+                .setName('startserver')
                 .setDescription('Start the Minecraft server')
                 .toJSON()
         ];
@@ -66,7 +65,7 @@ class MinecraftServerManager {
         try {
             console.log('🔄 Registering slash commands...');
             await rest.put(
-                Routes.applicationCommands(this.client.user?.id || 'temp'),
+                Routes.applicationCommands(this.client.user.id),
                 { body: commands }
             );
             console.log('✅ Successfully registered slash commands');

@@ -21,7 +21,7 @@ class MinecraftServerManager {
             rconPassword: process.env.RCON_PASSWORD,
             rconHost: process.env.RCON_HOST || 'localhost',
             rconPort: parseInt(process.env.RCON_PORT) || 25575,
-            serviceName: process.env.SERVICE_NAME || 'minecraft-server',
+            serviceName: process.env.SERVICE_NAME || 'minecraft',
             checkInterval: parseInt(process.env.CHECK_INTERVAL) || 60_000, // 1 minute
             shutdownDelay: parseInt(process.env.SHUTDOWN_DELAY) || 900_000  // 15 minutes
         };
@@ -37,7 +37,9 @@ class MinecraftServerManager {
             // Register slash commands
             await this.registerCommands();
 
-            await this.checkServerStatus();
+            if (await this.checkServerStatus()) {
+                this.startPlayerMonitoring();
+            }
         });
 
         this.client.on('interactionCreate', async (interaction) => {
@@ -91,7 +93,6 @@ class MinecraftServerManager {
 
             if (status) {
                 await interaction.editReply('✅ Minecraft server is already running!');
-                this.startPlayerMonitoring();
                 return;
             }
 
@@ -154,7 +155,7 @@ class MinecraftServerManager {
             // Notify channel
             const channel = this.client.channels.cache.get(this.config.channelId);
             if (channel) {
-                await channel.send('🔴 Minecraft server stopped due to inactivity.');
+                await channel.send('🛑 Minecraft server stopped due to inactivity.');
             }
 
             return true;

@@ -192,9 +192,15 @@ class MinecraftServerManager {
         }
 
         return new Promise((resolve, reject) => {
+            // Remove any existing listeners to prevent interference
+            this.rcon.removeAllListeners('response');
+            this.rcon.removeAllListeners('error');
+
+            // Set up one-time listeners
+            this.rcon.once('response', resolve);
+            this.rcon.once('error', reject);
+
             this.rcon.send(command);
-            this.rcon.on('response', resolve);
-            this.rcon.on('error', reject);
         });
     }
 

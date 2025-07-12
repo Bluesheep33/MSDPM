@@ -91,6 +91,7 @@ class MinecraftServerManager {
 
             if (status) {
                 await interaction.editReply('✅ Minecraft server is already running!');
+                this.startPlayerMonitoring();
                 return;
             }
 
@@ -221,7 +222,10 @@ class MinecraftServerManager {
             clearInterval(this.playerCheckInterval);
         }
 
-        this.lastPlayerCheckTime = Date.now();
+        if (this.shutdownTimer) {
+            clearTimeout(this.shutdownTimer);
+            this.shutdownTimer = null;
+        }
 
         this.playerCheckInterval = setInterval(async () => {
             if (!this.serverRunning) {
@@ -232,29 +236,28 @@ class MinecraftServerManager {
             const playerCount = await this.getOnlinePlayersCount();
 
             if (playerCount === -1) {
-                // Error getting player count, assume server is still needed
                 console.log('⚠️  Could not get player count, assuming server is still needed');
-                this.lastPlayerCheckTime = Date.now();
                 return;
             }
 
             if (playerCount > 0) {
-                // Players online, reset timer
-                this.lastPlayerCheckTime = Date.now();
                 console.log(`👥 ${playerCount} players online`);
+                // Cancel shutdown if players are online
+                if (this.shutdownTimer) {
+                    clearTimeout(this.shutdownTimer);
+                    this.shutdownTimer = null;
+                    console.log('✅ Shutdown cancelled - players are online');
+                }
             } else {
-                // No players online
-                const timeSinceLastPlayer = Date.now() - this.lastPlayerCheckTime;
-                const remainingTime = this.config.shutdownDelay - timeSinceLastPlayer;
-
-                console.log(`👤 No players online for ${Math.round(timeSinceLastPlayer / 1000)}s`);
-
-                if (timeSinceLastPlayer >= this.config.shutdownDelay) {
-                    console.log('🔄 Shutting down server due to inactivity');
-                    clearInterval(this.playerCheckInterval);
-                    await this.stopServer();
-                } else {
-                    console.log(`⏱️  Server will shut down in ${Math.round(remainingTime / 1000)}s if no players join`);
+                console.log('👤 No players online');
+                // Start shutdown timer if not already running
+                if (!this.shutdownTimer) {
+                    console.log(`⏱️  Starting ${this.config.shutdownDelay / 1000}s shutdown timer`);
+                    this.shutdownTimer = setTimeout(async () => {
+                        console.log('🔄 Shutting down server due to inactivity');
+                        clearInterval(this.playerCheckInterval);
+                        await this.stopServer();
+                    }, this.config.shutdownDelay);
                 }
             }
         }, this.config.checkInterval);

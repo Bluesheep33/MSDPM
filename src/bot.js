@@ -96,7 +96,7 @@ class MinecraftServerManager {
                 return;
             }
 
-            await interaction.editReply('🔄 Starting Minecraft server...');
+            await interaction.editReply('🔄 Sending start request to Minecraft server...');
 
             const success = await this.startServer();
 
@@ -151,12 +151,6 @@ class MinecraftServerManager {
             this.serverRunning = false;
 
             console.log('✅ Minecraft server stopped successfully');
-
-            // Notify channel
-            const channel = this.client.channels.cache.get(this.config.channelId);
-            if (channel) {
-                await channel.send('🛑 Minecraft server stopped due to inactivity.');
-            }
 
             return true;
         } catch (error) {
@@ -237,7 +231,7 @@ class MinecraftServerManager {
             const playerCount = await this.getOnlinePlayersCount();
 
             if (playerCount === -1) {
-                console.log('⚠️  Could not get player count, assuming server is still needed');
+                console.log('⚠️ Could not get player count, assuming server is still needed');
                 return;
             }
 
@@ -253,11 +247,27 @@ class MinecraftServerManager {
                 console.log('👤 No players online');
                 // Start shutdown timer if not already running
                 if (!this.shutdownTimer) {
-                    console.log(`⏱️  Starting ${this.config.shutdownDelay / 1000}s shutdown timer`);
+                    console.log(`⏱️ Starting ${this.config.shutdownDelay / 1000}s shutdown timer`);
                     this.shutdownTimer = setTimeout(async () => {
                         console.log('🔄 Shutting down server due to inactivity');
+
+                        // Notify channel about automatic shutdown with status updates
+                        const channel = this.client.channels.cache.get(this.config.channelId);
+                        if (channel) {
+                            const message = await channel.send('🔄 Sending stop request to Minecraft server due to inactivity...');
+
+                            const success = await this.stopServer();
+
+                            if (success) {
+                                await message.edit('🛑 Minecraft server stopped due to inactivity.');
+                            } else {
+                                await message.edit('❌ Failed to stop Minecraft server.');
+                            }
+                        } else {
+                            await this.stopServer();
+                        }
+
                         clearInterval(this.playerCheckInterval);
-                        await this.stopServer();
                     }, this.config.shutdownDelay);
                 }
             }

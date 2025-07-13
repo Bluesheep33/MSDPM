@@ -80,7 +80,7 @@ class MinecraftServerManager {
         // Check if command is used in the correct channel
         if (interaction.channelId !== this.config.channelId) {
             await interaction.reply({
-                content: '❌ This command can only be used in <#' + this.config.channelId + '>',
+                content: '❌ **This command can only be used in <#' + this.config.channelId + '>**',
                 ephemeral: true
             });
             return;
@@ -92,23 +92,23 @@ class MinecraftServerManager {
             const status = await this.checkServerStatus();
 
             if (status) {
-                await interaction.editReply('✅ Minecraft server is already running!');
+                await interaction.editReply('✅ **Minecraft server is already running!**');
                 return;
             }
 
-            await interaction.editReply('🔄 Sending start request to Minecraft server...');
+            await interaction.editReply('🔄 **Sending start request to Minecraft server...**');
 
             const success = await this.startServer();
 
             if (success) {
-                await interaction.editReply('✅ Minecraft server started successfully!');
+                await interaction.editReply('✅ **Minecraft server started successfully!**');
                 this.startPlayerMonitoring();
             } else {
-                await interaction.editReply('❌ Failed to start Minecraft server.');
+                await interaction.editReply('❌ **Failed to start Minecraft server.**');
             }
         } catch (error) {
             console.error('Error handling start command:', error);
-            await interaction.editReply('❌ An error occurred while starting the server.');
+            await interaction.editReply('❌ **An error occurred while starting the server.**');
         }
     }
 
@@ -261,14 +261,14 @@ class MinecraftServerManager {
                         // Notify channel about automatic shutdown with status updates
                         const channel = this.client.channels.cache.get(this.config.channelId);
                         if (channel) {
-                            const message = await channel.send('🔄 Sending stop request to Minecraft server due to inactivity...');
+                            const message = await channel.send('🔄 **Sending stop request to Minecraft server due to inactivity...**');
 
                             const success = await this.stopServer();
 
                             if (success) {
-                                await message.edit('🛑 Minecraft server stopped due to inactivity.');
+                                await message.edit('🛑 **Minecraft server stopped due to inactivity.**');
                             } else {
-                                await message.edit('❌ Failed to stop Minecraft server.');
+                                await message.edit('❌ **Failed to stop Minecraft server.**');
                             }
                         } else {
                             await this.stopServer();

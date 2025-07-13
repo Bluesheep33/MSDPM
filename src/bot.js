@@ -223,8 +223,11 @@ class MinecraftServerManager {
         }
 
         this.playerCheckInterval = setInterval(async () => {
+            await this.checkServerStatus();
+
             if (!this.serverRunning) {
                 clearInterval(this.playerCheckInterval);
+                console.log('❌ Server is no longer running, stopping player monitoring');
                 return;
             }
 
@@ -236,7 +239,11 @@ class MinecraftServerManager {
             }
 
             if (playerCount > 0) {
+                if (playerCount === 1) {
+                    console.log('👤 1 player online');
+                } else {
                 console.log(`👥 ${playerCount} players online`);
+                }
                 // Cancel shutdown if players are online
                 if (this.shutdownTimer) {
                     clearTimeout(this.shutdownTimer);

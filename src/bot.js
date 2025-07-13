@@ -112,7 +112,7 @@ class MinecraftServerManager {
                 } catch (error) {
                     clearInterval(loadingInterval);
                 }
-            }, 500);
+            }, 300);
 
             const success = await this.startServer();
 
@@ -299,7 +299,7 @@ class MinecraftServerManager {
                                 } catch (error) {
                                     clearInterval(loadingInterval);
                                 }
-                            }, 500);
+                            }, 300);
 
                             const success = await this.stopServer();
 

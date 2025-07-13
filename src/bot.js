@@ -38,7 +38,7 @@ class MinecraftServerManager {
             await this.registerCommands();
 
             if (await this.checkServerStatus()) {
-                this.startPlayerMonitoring();
+                this.startMonitoring();
             }
         });
 
@@ -102,7 +102,7 @@ class MinecraftServerManager {
 
             if (success) {
                 await interaction.editReply('✅ **Minecraft server started successfully!**');
-                this.startPlayerMonitoring();
+                this.startMonitoring();
             } else {
                 await interaction.editReply('❌ **Failed to start Minecraft server.**');
             }
@@ -212,7 +212,7 @@ class MinecraftServerManager {
         }
     }
 
-    startPlayerMonitoring() {
+    startMonitoring() {
         if (this.playerCheckInterval) {
             clearInterval(this.playerCheckInterval);
         }

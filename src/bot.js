@@ -96,9 +96,27 @@ class MinecraftServerManager {
                 return;
             }
 
-            await interaction.editReply('🔄 **Sending start request to Minecraft server...**');
+            const loadingMessages = [
+                '🔄 **Sending start request to Minecraft server.**',
+                '🔄 **Sending start request to Minecraft server..**',
+                '🔄 **Sending start request to Minecraft server...**'
+            ];
+
+            let messageIndex = 0;
+            await interaction.editReply(loadingMessages[messageIndex]);
+
+            const loadingInterval = setInterval(async () => {
+                messageIndex = (messageIndex + 1) % loadingMessages.length;
+                try {
+                    await interaction.editReply(loadingMessages[messageIndex]);
+                } catch (error) {
+                    clearInterval(loadingInterval);
+                }
+            }, 500);
 
             const success = await this.startServer();
+
+            clearInterval(loadingInterval);
 
             if (success) {
                 await interaction.editReply('✅ **Minecraft server started successfully!**');
@@ -265,9 +283,27 @@ class MinecraftServerManager {
                         // Notify channel about automatic shutdown with status updates
                         const channel = this.client.channels.cache.get(this.config.channelId);
                         if (channel) {
-                            const message = await channel.send('🔄 **Sending stop request to Minecraft server due to inactivity...**');
+                            const loadingMessages = [
+                                '🔄 **Sending stop request to Minecraft server due to inactivity.**',
+                                '🔄 **Sending stop request to Minecraft server due to inactivity..**',
+                                '🔄 **Sending stop request to Minecraft server due to inactivity...**'
+                            ];
+
+                            let messageIndex = 0;
+                            const message = await channel.send(loadingMessages[messageIndex]);
+
+                            const loadingInterval = setInterval(async () => {
+                                messageIndex = (messageIndex + 1) % loadingMessages.length;
+                                try {
+                                    await message.edit(loadingMessages[messageIndex]);
+                                } catch (error) {
+                                    clearInterval(loadingInterval);
+                                }
+                            }, 500);
 
                             const success = await this.stopServer();
+
+                            clearInterval(loadingInterval);
 
                             if (success) {
                                 await message.edit('🛑 **Minecraft server stopped due to inactivity.**');

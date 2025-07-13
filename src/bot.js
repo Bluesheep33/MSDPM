@@ -228,6 +228,10 @@ class MinecraftServerManager {
             if (!this.serverRunning) {
                 clearInterval(this.playerCheckInterval);
                 console.log('❌ Server is no longer running, stopping player monitoring');
+                const channel = this.client.channels.cache.get(this.config.channelId);
+                if (channel) {
+                    await channel.send('❌ **Minecraft server stopped (crashed or manually stopped by admin).**');
+                }
                 return;
             }
 

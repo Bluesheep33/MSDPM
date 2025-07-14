@@ -10,7 +10,6 @@ class MinecraftServerManager {
     constructor() {
         this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
         this.serverRunning = false;
-        this.lastPlayerCheckTime = null;
         this.playerCheckInterval = null;
         this.rcon = null;
 
@@ -283,6 +282,9 @@ class MinecraftServerManager {
                     console.log(`⏱️ Starting ${this.config.shutdownDelay / 1000}s shutdown timer`);
                     this.shutdownTimer = setTimeout(async () => {
                         console.log('🔄 Shutting down server due to inactivity');
+
+                        clearInterval(this.playerCheckInterval);
+                        this.playerCheckInterval = null;
 
                         // Notify channel about automatic shutdown with status updates
                         const channel = this.client.channels.cache.get(this.config.channelId);

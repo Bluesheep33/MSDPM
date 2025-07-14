@@ -233,6 +233,7 @@ class MinecraftServerManager {
     startMonitoring() {
         if (this.playerCheckInterval) {
             clearInterval(this.playerCheckInterval);
+            this.playerCheckInterval = null;
         }
 
         if (this.shutdownTimer) {
@@ -240,11 +241,14 @@ class MinecraftServerManager {
             this.shutdownTimer = null;
         }
 
+        console.log('🔍 Starting player monitoring...');
+
         this.playerCheckInterval = setInterval(async () => {
             await this.checkServerStatus();
 
             if (!this.serverRunning) {
                 clearInterval(this.playerCheckInterval);
+                this.playerCheckInterval = null;
                 console.log('❌ Server is no longer running, stopping player monitoring');
                 const channel = this.client.channels.cache.get(this.config.channelId);
                 if (channel) {
@@ -319,8 +323,6 @@ class MinecraftServerManager {
                 }
             }
         }, this.config.checkInterval);
-
-        console.log('🔍 Started player monitoring');
     }
 }
 

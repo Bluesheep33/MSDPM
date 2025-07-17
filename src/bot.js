@@ -6,6 +6,9 @@ require('dotenv').config();
 
 const execAsync = promisify(exec);
 
+/**
+ * MinecraftServerManager class to manage a Minecraft server via Discord bot.
+ */
 class MinecraftServerManager {
     constructor() {
         this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -25,9 +28,15 @@ class MinecraftServerManager {
             shutdownDelay: parseInt(process.env.SHUTDOWN_DELAY) || 900_000  // 15 minutes
         };
 
-        this.setupBot();
+        this.setupBot().then(
+            () => console.log('✅ Program initialized successfully!'),
+        );
     }
 
+    /**
+     * Initializes the bot and sets up event handlers.
+     * @returns {Promise<void>}
+     */
     async setupBot() {
         // Bot event handlers
         this.client.once('ready', async () => {
@@ -36,11 +45,13 @@ class MinecraftServerManager {
             // Register slash commands
             await this.registerCommands();
 
+            // Start monitoring on startup if the server is already running
             if (await this.checkServerStatus()) {
                 this.startMonitoring();
             }
         });
 
+        // Handle interactions
         this.client.on('interactionCreate', async (interaction) => {
             if (!interaction.isChatInputCommand()) return;
 
@@ -53,6 +64,10 @@ class MinecraftServerManager {
         await this.client.login(this.config.token);
     }
 
+    /**
+     * Registers the slash commands for the bot.
+     * @returns {Promise<void>}
+     */
     async registerCommands() {
         const commands = [
             new SlashCommandBuilder()
@@ -75,6 +90,11 @@ class MinecraftServerManager {
         }
     }
 
+    /**
+     * Handles the /startserver command interaction.
+     * @param interaction
+     * @returns {Promise<void>}
+     */
     async handleStartCommand(interaction) {
         // Check if command is used in the correct channel
         if (interaction.channelId !== this.config.channelId) {
@@ -88,13 +108,14 @@ class MinecraftServerManager {
         await interaction.deferReply();
 
         try {
+            // Check if the server is already running
             const status = await this.checkServerStatus();
-
             if (status) {
                 await interaction.editReply('✅ **Minecraft server is already running!**');
                 return;
             }
 
+            // If not running, proceed to start the server
             const loadingMessages = [
                 '🔄 **Sending start request to Minecraft server.**',
                 '🔄 **Sending start request to Minecraft server..**',
@@ -129,6 +150,10 @@ class MinecraftServerManager {
         }
     }
 
+    /**
+     * Checks if the Minecraft server is running.
+     * @returns {Promise<boolean>}
+     */
     async checkServerStatus() {
         try {
             const { stdout } = await execAsync(`systemctl is-active ${this.config.serviceName}`);
@@ -140,13 +165,17 @@ class MinecraftServerManager {
         }
     }
 
+    /**
+     * Starts the Minecraft server using systemctl.
+     * @returns {Promise<boolean>}
+     */
     async startServer() {
         try {
+            // Start the server using systemctl
             await execAsync(`sudo systemctl start ${this.config.serviceName}`);
 
-            // Wait a moment for the service to start
+            // Update isRunning status
             await new Promise(resolve => setTimeout(resolve, 3000));
-
             const isRunning = await this.checkServerStatus();
 
             if (isRunning) {
@@ -164,8 +193,17 @@ class MinecraftServerManager {
 
     async stopServer() {
         try {
+            // Stop the server using systemctl
             await execAsync(`sudo systemctl stop ${this.config.serviceName}`);
+
+            // Update isRunning status
             this.serverRunning = false;
+
+            // Close RCON connection if it exists
+            if (this.rcon) {
+                this.rcon.disconnect();
+                this.rcon = null;
+            }
 
             console.log('✅ Minecraft server stopped successfully');
 
@@ -340,6 +378,5 @@ process.on('SIGTERM', () => {
 });
 
 // Start the bot
-const bot = new MinecraftServerManager();
-
+new MinecraftServerManager();
 console.log('🚀 Starting Minecraft Discord Bot...');

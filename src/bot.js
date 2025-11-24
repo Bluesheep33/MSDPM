@@ -28,9 +28,9 @@ class MinecraftServerManager {
             shutdownDelay: parseInt(process.env.SHUTDOWN_DELAY) || 900_000  // 15 minutes
         };
 
-        this.setupBot().then(
-            () => console.log('✅ Program initialized successfully!'),
-        );
+        this.setupBot().then(() => {
+            console.log('✅ Bot setup complete');
+        });
     }
 
     /**
@@ -202,7 +202,6 @@ class MinecraftServerManager {
             // Close RCON connection if it exists
             if (this.rcon) {
                 this.rcon.disconnect();
-                this.rcon = null;
             }
 
             console.log('✅ Minecraft server stopped successfully');
@@ -215,8 +214,6 @@ class MinecraftServerManager {
     }
 
     async connectRcon() {
-        if (this.rcon) return this.rcon;
-
         try {
             this.rcon = new Rcon(this.config.rconHost, this.config.rconPort, this.config.rconPassword);
             await new Promise((resolve, reject) => {
@@ -281,11 +278,17 @@ class MinecraftServerManager {
         console.log('🔍 Starting player monitoring...');
 
         this.playerCheckInterval = setInterval(async () => {
+            console.log('🔄 Checking server status and player count...');
             await this.checkServerStatus();
 
             if (!this.serverRunning) {
                 clearInterval(this.playerCheckInterval);
                 this.playerCheckInterval = null;
+
+                if (this.rcon) {
+                    this.rcon.disconnect();
+                }
+
                 console.log('❌ Server is no longer running, stopping player monitoring');
                 const channel = this.client.channels.cache.get(this.config.channelId);
                 if (channel) {

@@ -14,6 +14,7 @@ class MinecraftServerManager {
         this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
         this.serverRunning = false;
         this.playerCheckInterval = null;
+        this.shutdownTimer = null;
         this.rcon = null;
 
         // Configuration from environment variables
@@ -199,9 +200,24 @@ class MinecraftServerManager {
             // Update isRunning status
             this.serverRunning = false;
 
-            // Close RCON connection if it exists
+            // Clear any pending timers
+            if (this.shutdownTimer) {
+                clearTimeout(this.shutdownTimer);
+                this.shutdownTimer = null;
+            }
+            if (this.playerCheckInterval) {
+                clearInterval(this.playerCheckInterval);
+                this.playerCheckInterval = null;
+            }
+
+            // Close RCON connection if it exists and reset to null
             if (this.rcon) {
-                this.rcon.disconnect();
+                try {
+                    this.rcon.disconnect();
+                } catch (error) {
+                    // Ignore disconnect errors
+                }
+                this.rcon = null;
             }
 
             console.log('✅ Minecraft server stopped successfully');
@@ -213,21 +229,66 @@ class MinecraftServerManager {
         }
     }
 
-    async connectRcon() {
-        try {
-            this.rcon = new Rcon(this.config.rconHost, this.config.rconPort, this.config.rconPassword);
-            await new Promise((resolve, reject) => {
-                this.rcon.on('auth', resolve);
-                this.rcon.on('error', reject);
-                this.rcon.connect();
-            });
-            console.log('✅ RCON connected successfully');
-            return this.rcon;
-        } catch (error) {
-            console.error('❌ Failed to connect to RCON:', error);
+    async connectRcon(retries = 3, retryDelay = 5000) {
+        // Cleanup any existing stale connection
+        if (this.rcon) {
+            try {
+                this.rcon.disconnect();
+            } catch (error) {
+                // Ignore disconnect errors
+            }
             this.rcon = null;
-            return null;
         }
+
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                console.log(`🔄 RCON connection attempt ${attempt}/${retries}...`);
+
+                this.rcon = new Rcon(this.config.rconHost, this.config.rconPort, this.config.rconPassword);
+
+                // Connect with timeout
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('RCON connection timeout'));
+                    }, 30000); // 30 second timeout
+
+                    this.rcon.on('auth', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    });
+                    this.rcon.on('error', (error) => {
+                        clearTimeout(timeout);
+                        reject(error);
+                    });
+                    this.rcon.connect();
+                });
+
+                console.log('✅ RCON connected successfully');
+                return this.rcon;
+            } catch (error) {
+                console.error(`❌ RCON connection attempt ${attempt}/${retries} failed:`, error.message);
+
+                // Cleanup failed connection
+                if (this.rcon) {
+                    try {
+                        this.rcon.disconnect();
+                    } catch (e) {
+                        // Ignore
+                    }
+                    this.rcon = null;
+                }
+
+                // Wait before retry if not last attempt
+                if (attempt < retries) {
+                    console.log(`⏳ Waiting ${retryDelay / 1000}s before next RCON connection attempt...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                }
+            }
+        }
+
+        console.error('❌ Failed to connect to RCON after all retries');
+        this.rcon = null;
+        return null;
     }
 
     async sendRconCommand(command) {
@@ -260,6 +321,15 @@ class MinecraftServerManager {
             return match ? parseInt(match[1]) : 0;
         } catch (error) {
             console.error('Error getting player count:', error);
+            // Reset RCON connection to force reconnection on next attempt
+            if (this.rcon) {
+                try {
+                    this.rcon.disconnect();
+                } catch (e) {
+                    // Ignore disconnect errors
+                }
+                this.rcon = null;
+            }
             return -1; // Return -1 to indicate error
         }
     }
@@ -277,109 +347,151 @@ class MinecraftServerManager {
 
         console.log('🔍 Starting player monitoring...');
 
-        this.playerCheckInterval = setInterval(async () => {
-            console.log('🔄 Checking server status and player count...');
-            await this.checkServerStatus();
+        // Wait 30 seconds before first check to allow RCON to become available
+        console.log('⏳ Waiting 30s for RCON to become available...');
+        setTimeout(() => {
+            this.playerCheckInterval = setInterval(async () => {
+                await this.checkServerStatus();
 
-            if (!this.serverRunning) {
-                clearInterval(this.playerCheckInterval);
-                this.playerCheckInterval = null;
+                if (!this.serverRunning) {
+                    clearInterval(this.playerCheckInterval);
+                    this.playerCheckInterval = null;
 
-                if (this.rcon) {
-                    this.rcon.disconnect();
-                }
-
-                console.log('❌ Server is no longer running, stopping player monitoring');
-                const channel = this.client.channels.cache.get(this.config.channelId);
-                if (channel) {
-                    await channel.send('❌ **Minecraft server stopped (crashed or manually stopped by admin).**');
-                }
-                return;
-            }
-
-            const playerCount = await this.getOnlinePlayersCount();
-
-            if (playerCount === -1) {
-                console.log('⚠️ Could not get player count, assuming server is still needed');
-                return;
-            }
-
-            if (playerCount > 0) {
-                if (playerCount === 1) {
-                    console.log('👤 1 player online');
-                } else {
-                console.log(`👥 ${playerCount} players online`);
-                }
-                // Cancel shutdown if players are online
-                if (this.shutdownTimer) {
-                    clearTimeout(this.shutdownTimer);
-                    this.shutdownTimer = null;
-                    console.log('✅ Shutdown cancelled - players are online');
-                }
-            } else {
-                console.log('👤 No players online');
-                // Start shutdown timer if not already running
-                if (!this.shutdownTimer) {
-                    console.log(`⏱️ Starting ${this.config.shutdownDelay / 1000}s shutdown timer`);
-                    this.shutdownTimer = setTimeout(async () => {
-                        console.log('🔄 Shutting down server due to inactivity');
-
-                        clearInterval(this.playerCheckInterval);
-                        this.playerCheckInterval = null;
-
-                        // Notify channel about automatic shutdown with status updates
-                        const channel = this.client.channels.cache.get(this.config.channelId);
-                        if (channel) {
-                            const loadingMessages = [
-                                '🔄 **Sending stop request to Minecraft server due to inactivity.**',
-                                '🔄 **Sending stop request to Minecraft server due to inactivity..**',
-                                '🔄 **Sending stop request to Minecraft server due to inactivity...**'
-                            ];
-
-                            let messageIndex = 0;
-                            const message = await channel.send(loadingMessages[messageIndex]);
-
-                            const loadingInterval = setInterval(async () => {
-                                messageIndex = (messageIndex + 1) % loadingMessages.length;
-                                try {
-                                    await message.edit(loadingMessages[messageIndex]);
-                                } catch (error) {
-                                    clearInterval(loadingInterval);
-                                }
-                            }, 300);
-
-                            const success = await this.stopServer();
-
-                            clearInterval(loadingInterval);
-
-                            if (success) {
-                                await message.edit('🛑 **Minecraft server stopped due to inactivity.**');
-                            } else {
-                                await message.edit('❌ **Failed to stop Minecraft server.**');
-                            }
-                        } else {
-                            await this.stopServer();
+                    // Clean up RCON connection and reset to null
+                    if (this.rcon) {
+                        try {
+                            this.rcon.disconnect();
+                        } catch (error) {
+                            // Ignore disconnect errors
                         }
+                        this.rcon = null;
+                    }
 
-                        clearInterval(this.playerCheckInterval);
-                    }, this.config.shutdownDelay);
+                    console.log('❌ Server is no longer running, stopping player monitoring');
+                    const channel = this.client.channels.cache.get(this.config.channelId);
+                    if (channel) {
+                        await channel.send('❌ **Minecraft server stopped (crashed or manually stopped by admin).**');
+                    }
+                    return;
                 }
-            }
-        }, this.config.checkInterval);
+
+                const playerCount = await this.getOnlinePlayersCount();
+
+                if (playerCount === -1) {
+                    console.log('⚠️ Could not get player count, assuming server is still needed');
+                    return;
+                }
+
+                if (playerCount > 0) {
+                    if (playerCount === 1) {
+                        console.log('👤 1 player online');
+                    } else {
+                    console.log(`👥 ${playerCount} players online`);
+                    }
+                    // Cancel shutdown if players are online
+                    if (this.shutdownTimer) {
+                        clearTimeout(this.shutdownTimer);
+                        this.shutdownTimer = null;
+                        console.log('✅ Shutdown cancelled - players are online');
+                    }
+                } else {
+                    console.log('👤 No players online');
+                    // Start shutdown timer if not already running
+                    if (!this.shutdownTimer) {
+                        console.log(`⏱️ Starting ${this.config.shutdownDelay / 1000}s shutdown timer`);
+                        this.shutdownTimer = setTimeout(async () => {
+                            console.log('🔄 Shutting down server due to inactivity');
+
+                            // Notify channel about automatic shutdown with status updates
+                            const channel = this.client.channels.cache.get(this.config.channelId);
+                            if (channel) {
+                                const loadingMessages = [
+                                    '🔄 **Sending stop request to Minecraft server due to inactivity.**',
+                                    '🔄 **Sending stop request to Minecraft server due to inactivity..**',
+                                    '🔄 **Sending stop request to Minecraft server due to inactivity...**'
+                                ];
+
+                                let messageIndex = 0;
+                                const message = await channel.send(loadingMessages[messageIndex]);
+
+                                const loadingInterval = setInterval(async () => {
+                                    messageIndex = (messageIndex + 1) % loadingMessages.length;
+                                    try {
+                                        await message.edit(loadingMessages[messageIndex]);
+                                    } catch (error) {
+                                        clearInterval(loadingInterval);
+                                    }
+                                }, 300);
+
+                                const success = await this.stopServer();
+
+                                clearInterval(loadingInterval);
+
+                                if (success) {
+                                    await message.edit('🛑 **Minecraft server stopped due to inactivity.**');
+                                } else {
+                                    await message.edit('❌ **Failed to stop Minecraft server.**');
+                                }
+                            } else {
+                                await this.stopServer();
+                            }
+                        }, this.config.shutdownDelay);
+                    }
+                }
+            }, this.config.checkInterval);
+        }, 30000);
     }
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-    console.log('🔄 Shutting down bot...');
-    process.exit(0);
-});
+// Store bot instance for graceful shutdown
+let botInstance = null;
 
-process.on('SIGTERM', () => {
+/**
+ * Gracefully shuts down the bot and cleans up resources
+ */
+async function gracefulShutdown() {
     console.log('🔄 Shutting down bot...');
+
+    if (botInstance) {
+        // Clear any pending timers
+        if (botInstance.shutdownTimer) {
+            clearTimeout(botInstance.shutdownTimer);
+            botInstance.shutdownTimer = null;
+        }
+        if (botInstance.playerCheckInterval) {
+            clearInterval(botInstance.playerCheckInterval);
+            botInstance.playerCheckInterval = null;
+        }
+
+        // Close RCON connection
+        if (botInstance.rcon) {
+            try {
+                botInstance.rcon.disconnect();
+            } catch (error) {
+                // Ignore disconnect errors
+            }
+            botInstance.rcon = null;
+        }
+
+        // Destroy Discord client
+        if (botInstance.client) {
+            try {
+                botInstance.client.destroy();
+                console.log('✅ Discord client destroyed');
+            } catch (error) {
+                console.error('Error destroying Discord client:', error);
+            }
+        }
+    }
+
+    console.log('👋 Goodbye!');
     process.exit(0);
-});
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
 // Start the bot
-new MinecraftServerManager();
 console.log('🚀 Starting Minecraft Discord Bot...');
+botInstance = new MinecraftServerManager();

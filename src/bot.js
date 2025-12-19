@@ -16,6 +16,7 @@ class MinecraftServerManager {
         this.playerCheckInterval = null;
         this.shutdownTimer = null;
         this.rcon = null;
+        this.isIntentionalShutdown = false; // Track if shutdown was intentional (not a crash)
 
         // Configuration from environment variables
         this.config = {
@@ -172,6 +173,9 @@ class MinecraftServerManager {
      */
     async startServer() {
         try {
+            // Reset intentional shutdown flag for new server session
+            this.isIntentionalShutdown = false;
+
             // Start the server using systemctl
             await execAsync(`sudo systemctl start ${this.config.serviceName}`);
 
@@ -194,6 +198,9 @@ class MinecraftServerManager {
 
     async stopServer() {
         try {
+            // Mark this as an intentional shutdown to prevent "crashed" message
+            this.isIntentionalShutdown = true;
+
             // Stop the server using systemctl
             await execAsync(`sudo systemctl stop ${this.config.serviceName}`);
 
@@ -367,10 +374,15 @@ class MinecraftServerManager {
                         this.rcon = null;
                     }
 
-                    console.log('❌ Server is no longer running, stopping player monitoring');
-                    const channel = this.client.channels.cache.get(this.config.channelId);
-                    if (channel) {
-                        await channel.send('❌ **Minecraft server stopped (crashed or manually stopped by admin).**');
+                    // Only send crash message if this wasn't an intentional shutdown
+                    if (!this.isIntentionalShutdown) {
+                        console.log('❌ Server is no longer running, stopping player monitoring');
+                        const channel = this.client.channels.cache.get(this.config.channelId);
+                        if (channel) {
+                            await channel.send('❌ **Minecraft server stopped (crashed or manually stopped by admin).**');
+                        }
+                    } else {
+                        console.log('🛑 Server stopped intentionally, stopping player monitoring');
                     }
                     return;
                 }
